@@ -1,0 +1,35 @@
+package "udp benchmark"
+version "0.1"
+purpose "measures performance of different network implementations"
+
+option "target-ip" t "ip address to send to" string default="127.0.0.1" optional
+option "target-port" p "port to send to" int default="5000" optional
+
+option "msg-count" m "the number of messages" int default="1000" optional
+option "msg-size"  s "the size of messages in bytes" int default="1400" optional
+
+option "csv"       o "file for csv output" string optional
+
+# package "<packname>"
+# version "<version>"
+# purpose "<purpose>"
+# usage "<usage>"
+# description "<description>"
+# versiontext "<versiontext>"
+# 
+# args "<command line options>"
+# 
+# option <long> <short> "<desc>"
+# 	{details="<detailed description>"}
+# 	{argtype} {typestr="<type descr>"}
+# 	{values="<value1>","<value2>",...}
+# 	{default="<default value>"}
+# 	{dependon="<other option>"}
+# 	{required} {argoptional} {multiple}
+# 	{hidden}
+# 
+# option <long> <short> "<desc>" flag <on/off>
+# 
+# section "section name" {sectiondesc="optional section description"}
+# 
+# text "a textual sentence"
