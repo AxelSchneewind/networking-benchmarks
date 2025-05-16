@@ -2,11 +2,11 @@ package "udp benchmark"
 version "0.1"
 purpose "measures performance of different network implementations"
 
-option "peer-ip" t "ip address to send to" string default="127.0.0.1" optional
-option "peer-port" p "port to send to" int default="5000" optional
+option "peer-ip" t "ip address to receive from" string default="127.0.0.1" optional
+option "peer-port" p "port to receive from" int default="5001" optional
 
 option "my-ip" T "ip address to bind to" string default="127.0.0.1" optional
-option "my-port" P "port to bind to" int default="5001" optional
+option "my-port" P "port to bind to" int default="5000" optional
 
 option "msg-count" m "the number of messages" int default="1000" optional
 option "msg-size"  s "the size of messages in bytes" int default="1400" optional

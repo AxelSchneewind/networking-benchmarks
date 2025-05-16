@@ -11,12 +11,10 @@
 #include<unistd.h> 
 #include<stdlib.h> 
 
-
 #include "cmdline.h"
-#include "time.h"
-
-#include "setdata.h"
 #include "filter.h"
+
+#include "time.h"
 
 int main(int argc, char **argv) 
 { 
@@ -42,6 +40,7 @@ int main(int argc, char **argv)
     // setup connection
 	int sockfd, n; 
 	struct sockaddr_in servaddr; 
+	
 	bzero(&servaddr, sizeof(servaddr)); 
 	servaddr.sin_addr.s_addr = inet_addr(args.my_ip_arg); 
 	servaddr.sin_port = htons(args.my_port_arg); 
@@ -49,47 +48,45 @@ int main(int argc, char **argv)
 	
 	// create datagram socket 
 	sockfd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP); 
-	
-    printf("binding to %s:%i\n", args.my_ip_arg, args.my_port_arg);
 
-    // bind to addr
+    printf("binding to %s:%i\n", args.my_ip_arg, args.my_port_arg);
+	
+	// connect to server 
+    socklen_t addr_len;
 	if(bind(sockfd, (struct sockaddr *)&servaddr, sizeof(servaddr)) < 0) 
 	{ 
 		printf("\n Error : Connect Failed \n"); 
 		exit(0); 
 	} 
 
-    printf("sending %i messages of size %i to %s:%i\n", args.msg_count_arg, args.msg_size_arg, args.peer_ip_arg, args.peer_port_arg);
-
+    printf("receiving %i messages of size %i from %s:%i\n", args.msg_count_arg, args.msg_size_arg, args.peer_ip_arg, args.peer_port_arg);
 
     // 
     struct timespec tp_before, tp_after;
 
-    clock_gettime(CLOCK_MONOTONIC_COARSE, &tp_before);
-
-    // setup target address
-	struct sockaddr_in peeraddr; 
-	peeraddr.sin_addr.s_addr = inet_addr(args.peer_ip_arg); 
-	peeraddr.sin_port = htons(args.peer_port_arg); 
-	peeraddr.sin_family = AF_INET; 
+    socklen_t addr_size = 0;
+    struct sockaddr sender_addr;
 
     // iteratively send messages
-    int valid_packets = 0;
-    int i;
-    for (i = 0; valid_packets < msg_count; i++) {
-        message[0] = 'a' + (i % 26);
+    int valid_packets = 0, seq_no = 0;
+    int i; 
+    for (i = 0; seq_no < msg_count; i++) {
+	    // request to recv datagram 
+	    // no need to specify server address in recvfrom 
+	    // connect stores the peers IP and port 
+	    recvfrom(sockfd, message, msg_size, 0, &sender_addr, &addr_size); 
 
-        // write sequence number of packets into payload
-        *(int*)(&message[4]) = i;
+        // start timer after first packet
+        if (i == 0)
+            clock_gettime(CLOCK_MONOTONIC_COARSE, &tp_before);
 
-        setdata(message, i);
         if (filter(message))
             valid_packets++;
 
-	    // request to send datagram 
-	    sendto(sockfd, message, msg_size, 0, (const struct sockaddr*)&peeraddr, sizeof(peeraddr)); 
+        // get sequence number of packet from payload
+        seq_no = *(int*)(&message[4]);
     }
-    printf("\rsent %i(valid)/%i(total)\n", valid_packets, i);
+    printf("\rgot %i(valid)/%i(received in userspace)/%i(sent)\n", valid_packets, i, seq_no);
 
     clock_gettime(CLOCK_MONOTONIC_COARSE, &tp_after);
 
