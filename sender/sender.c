@@ -11,12 +11,10 @@
 #include<unistd.h> 
 #include<stdlib.h> 
 
-
 #include "cmdline.h"
-#include "time.h"
-
 #include "setdata.h"
 #include "filter.h"
+#include "time.h"
 
 int main(int argc, char **argv) 
 { 
@@ -65,7 +63,7 @@ int main(int argc, char **argv)
     // 
     struct timespec tp_before, tp_after;
 
-    clock_gettime(CLOCK_MONOTONIC_COARSE, &tp_before);
+    // clock_gettime(CLOCK_MONOTONIC_COARSE, &tp_before);
 
     // setup target address
 	struct sockaddr_in peeraddr; 
@@ -76,13 +74,19 @@ int main(int argc, char **argv)
     // iteratively send messages
     int valid_packets = 0;
     int i;
-    for (i = 0; valid_packets < msg_count; i++) {
+    for (i = 0; i < msg_count; i++) {
         message[0] = 'a' + (i % 26);
 
         // write sequence number of packets into payload
         *(int*)(&message[4]) = i;
 
-        setdata(message, i);
+        // last packet must be valid
+        if (i < msg_count - 1) {
+            setdata(message, i);
+        } else {
+            setdata_valid(message);
+        }
+
         if (filter(message))
             valid_packets++;
 
@@ -91,13 +95,13 @@ int main(int argc, char **argv)
     }
     printf("\rsent %i(valid)/%i(total)\n", valid_packets, i);
 
-    clock_gettime(CLOCK_MONOTONIC_COARSE, &tp_after);
+    // clock_gettime(CLOCK_MONOTONIC_COARSE, &tp_after);
 
 	// close the descriptor 
 	close(sockfd); 
 
-    unsigned seconds = tp_after.tv_sec - tp_before.tv_sec;
-    unsigned long ns = (tp_after.tv_nsec - tp_before.tv_nsec) % 1000000000;
-    printf("done, took %i.%9.9lus\n", seconds, ns);
+    // unsigned seconds = tp_after.tv_sec - tp_before.tv_sec;
+    // unsigned long ns = (tp_after.tv_nsec - tp_before.tv_nsec) % 1000000000;
+    // printf("done, took %i.%9.9lus\n", seconds, ns);
 } 
 

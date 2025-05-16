@@ -12,9 +12,19 @@
 #include<stdlib.h> 
 
 #include "cmdline.h"
-#include "filter.h"
 
+#include "filter.h"
 #include "time.h"
+
+
+void write_csv(char* fname, unsigned long size, int total, int recvd, int valid, long seconds, unsigned long ns) {
+    FILE* fd = fopen(fname, "a");
+    fprintf(fd, "size,total,recvd,valid,time\n");
+    fprintf(fd, "%lu,%i,%i,%i,%u.%9.9lu\n", size, total, recvd, valid, seconds, ns % 1000000000);
+}
+
+
+
 
 int main(int argc, char **argv) 
 { 
@@ -70,7 +80,7 @@ int main(int argc, char **argv)
     // iteratively send messages
     int valid_packets = 0, seq_no = 0;
     int i; 
-    for (i = 0; seq_no < msg_count; i++) {
+    for (i = 0; seq_no < msg_count - 1; i++) {
 	    // request to recv datagram 
 	    // no need to specify server address in recvfrom 
 	    // connect stores the peers IP and port 
@@ -86,15 +96,19 @@ int main(int argc, char **argv)
         // get sequence number of packet from payload
         seq_no = *(int*)(&message[4]);
     }
-    printf("\rgot %i(valid)/%i(received in userspace)/%i(sent)\n", valid_packets, i, seq_no);
-
     clock_gettime(CLOCK_MONOTONIC_COARSE, &tp_after);
 
 	// close the descriptor 
 	close(sockfd); 
 
-    unsigned seconds = tp_after.tv_sec - tp_before.tv_sec;
+    printf("got %i(valid)/%i(received in userspace)/%i(sent)\n", valid_packets, i, seq_no + 1);
+
+    unsigned      seconds = tp_after.tv_sec - tp_before.tv_sec;
     unsigned long ns = (tp_after.tv_nsec - tp_before.tv_nsec) % 1000000000;
-    printf("done, took %i.%9.9lus\n", seconds, ns);
+    printf("took %i.%9.9lus\n", seconds, ns);
+
+    if (args.csv_given) {
+         write_csv(args.csv_arg, msg_size, seq_no + 1, i, valid_packets, seconds, ns);
+    }
 } 
 
