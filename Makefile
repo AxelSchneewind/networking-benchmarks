@@ -185,23 +185,21 @@ PORT_SENDER=5000
 IP_RECEIVER=127.0.0.1
 PORT_RECEIVER=5001
 
-PACKETS_SENT=6000
-PACKETS_RECEIVED=6000
+PACKETS_SENT=100000
+PACKETS_RECEIVED=100000
 PACKET_SIZE=20
 
-
 exp-xdp-filter-recv: xdp-load-xdp-filter receiver/receiver 
-	./receiver/receiver --msg-size $(PACKET_SIZE) --msg-count $(PACKETS_SENT) --my-ip $(IP_SENDER) --my-port $(PORT_SENDER) --peer-ip $(IP_RECEIVER) --peer-port $(PORT_RECEIVER)
+	./receiver/receiver --msg-size $(PACKET_SIZE) --msg-count $(PACKETS_RECEIVED) --my-ip $(IP_RECEIVER) --my-port $(PORT_RECEIVER) --peer-ip $(IP_SENDER) --peer-port $(PORT_SENDER) --csv result-xdp.csv
 
 exp-xdp-filter-send: sender/sender 
-	./sender/sender --msg-size $(PACKET_SIZE)  --msg-count $(PACKETS_RECEIVED) --my-ip $(IP_RECEIVER) --my-port $(PORT_RECEIVER) --peer-ip $(IP_SENDER) --peer-port $(PORT_SENDER)
+	./sender/sender --msg-size $(PACKET_SIZE) --msg-count $(PACKETS_SENT) --my-ip $(IP_SENDER) --my-port $(PORT_SENDER) --peer-ip $(IP_RECEIVER) --peer-port $(PORT_RECEIVER)
 
 
 exp-def-filter-recv: xdp-unload receiver/receiver 
-	./receiver/receiver --msg-size $(PACKET_SIZE) --msg-count $(PACKETS_SENT) --my-ip $(IP_SENDER) --my-port $(PORT_SENDER) --peer-ip $(IP_RECEIVER) --peer-port $(PORT_RECEIVER)
-
+	./receiver/receiver --msg-size $(PACKET_SIZE) --msg-count $(PACKETS_RECEIVED) --my-ip $(IP_RECEIVER) --my-port $(PORT_RECEIVER) --peer-ip $(IP_SENDER) --peer-port $(PORT_SENDER) --csv result-def.csv
 exp-def-filter-send: sender/sender 
-	./sender/sender --msg-size $(PACKET_SIZE) --msg-count $(PACKETS_RECEIVED) --my-ip $(IP_RECEIVER) --my-port $(PORT_RECEIVER) --peer-ip $(IP_SENDER) --peer-port $(PORT_SENDER)
+	./sender/sender --msg-size $(PACKET_SIZE) --msg-count $(PACKETS_SENT) --my-ip $(IP_SENDER) --my-port $(PORT_SENDER) --peer-ip $(IP_RECEIVER) --peer-port $(PORT_RECEIVER)
 
 
 
