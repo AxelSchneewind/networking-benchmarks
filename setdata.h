@@ -7,5 +7,5 @@ void setdata_valid(char* data) {
 }
 
 void setdata_invalid(char* data) {
-    data[0] = 'a';
+    data[0] = 0;
 }

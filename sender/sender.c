@@ -7,9 +7,9 @@
 #include <sys/types.h> 
 #include <arpa/inet.h> 
 #include <sys/socket.h> 
-#include<netinet/in.h> 
-#include<unistd.h> 
-#include<stdlib.h> 
+#include <netinet/in.h> 
+#include <unistd.h> 
+#include <stdlib.h> 
 
 #include "cmdline.h"
 #include "setdata.h"
@@ -63,8 +63,6 @@ int main(int argc, char **argv)
     // 
     struct timespec tp_before, tp_after;
 
-    // clock_gettime(CLOCK_MONOTONIC_COARSE, &tp_before);
-
     // setup target address
 	struct sockaddr_in peeraddr; 
 	peeraddr.sin_addr.s_addr = inet_addr(args.peer_ip_arg); 
@@ -80,11 +78,20 @@ int main(int argc, char **argv)
         // write sequence number of packets into payload
         *(int*)(&message[4]) = i;
 
-        // last packet must be valid
-        if (i < msg_count - 1) {
-            setdata(message, i);
-        } else {
+
+        if (i == 0 || i >= msg_count - 1) {
+            // first and last packet must be valid
             setdata_valid(message);
+        } else {
+            if (args.all_invalid_flag) {
+                // all packets invalid:
+                setdata_invalid(message);
+            } else if (args.all_valid_flag) {
+                setdata_valid(message);
+            } else {
+                // default case: set data depending on seq number
+                setdata(message, i);
+            }
         }
 
         if (filter(message))
@@ -95,13 +102,7 @@ int main(int argc, char **argv)
     }
     printf("\rsent %i(valid)/%i(total)\n", valid_packets, i);
 
-    // clock_gettime(CLOCK_MONOTONIC_COARSE, &tp_after);
-
 	// close the descriptor 
 	close(sockfd); 
-
-    // unsigned seconds = tp_after.tv_sec - tp_before.tv_sec;
-    // unsigned long ns = (tp_after.tv_nsec - tp_before.tv_nsec) % 1000000000;
-    // printf("done, took %i.%9.9lus\n", seconds, ns);
 } 
 

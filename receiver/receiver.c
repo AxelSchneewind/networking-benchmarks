@@ -18,9 +18,16 @@
 
 
 void write_csv(char* fname, unsigned long size, int total, int recvd, int valid, long seconds, unsigned long ns) {
-    FILE* fd = fopen(fname, "a");
-    fprintf(fd, "size,total,recvd,valid,time\n");
-    fprintf(fd, "%lu,%i,%i,%i,%u.%9.9lu\n", size, total, recvd, valid, seconds, ns % 1000000000);
+    if (access(fname, F_OK) == 0) {
+        // file exists, no header needed
+        FILE* fd = fopen(fname, "a");
+        fprintf(fd, "%lu,%i,%i,%i,%u.%9.9lu\n", size, total, recvd, valid, seconds, ns % 1000000000);
+    } else {
+        // file doesn't exist, write header
+        FILE* fd = fopen(fname, "w");
+        fprintf(fd, "size,total,recvd,valid,time\n");
+        fprintf(fd, "%lu,%i,%i,%i,%u.%9.9lu\n", size, total, recvd, valid, seconds, ns % 1000000000);
+    }
 }
 
 

@@ -27,6 +27,7 @@ help:
 
 # get source code
 xdp-tutorial:
+	@[ -d xdp-tutorial ] && exit
 	@git clone --recurse-submodules https://github.com/xdp-project/xdp-tutorial.git&&\
 	cd xdp-tutorial && ./testenv/setup-env.sh && make
 
@@ -35,14 +36,16 @@ xdp-tutorial:
 
 # copy subproject into xdp-tutorials to allow compilation using its Makefile
 xdp-tutorial/%: %/ xdp-tutorial filter.h
-	@echo 'copying $* to xdp-tutorial/$*'
-	@cp filter.h $*
-	@cp -rf $* xdp-tutorial/
+	echo 'copying $* to xdp-tutorial/$*'
+	cp filter.h $*
+	rm -rf xdp-tutorial/$*
+	cp -rf $* xdp-tutorial/$*
 
 # compile an xdp-program
 xdp-compile-%: xdp-tutorial/% %/ filter.h
-	@echo 'compiling program $*'
-	@make -C xdp-tutorial/$*
+	echo 'compiling program $*'
+	@cp -rf $* xdp-tutorial/
+	make -C xdp-tutorial/$*
 
 .phony: xdp-compile-xdp-filter
 xdp-compile: xdp-compile-xdp-filter
@@ -165,7 +168,7 @@ sender/sender: sender/sender.c sender/cmdline.c
 	gcc sender/*.c -I. -o sender/sender
 
 run-sender: sender/sender
-	./sender/sender -m 18000
+	./sender/sender -m 6000
 
 
 receiver/cmdline.c: receiver/cmdline.ggo
@@ -181,26 +184,47 @@ run-receiver: receiver/receiver
 
 ################################## EXPERIMENTS ##################################
 IP_SENDER=127.0.0.1
-PORT_SENDER=5000
+PORT_SENDER=5005
 IP_RECEIVER=127.0.0.1
-PORT_RECEIVER=5001
+PORT_RECEIVER=5006
 
 PACKETS_SENT=100000
 PACKETS_RECEIVED=100000
 PACKET_SIZE=20
 
-exp-xdp-filter-recv: xdp-load-xdp-filter receiver/receiver 
-	./receiver/receiver --msg-size $(PACKET_SIZE) --msg-count $(PACKETS_RECEIVED) --my-ip $(IP_RECEIVER) --my-port $(PORT_RECEIVER) --peer-ip $(IP_SENDER) --peer-port $(PORT_SENDER) --csv result-xdp.csv
 
-exp-xdp-filter-send: sender/sender 
+# send side
+exp-filter-send: sender/sender 
 	./sender/sender --msg-size $(PACKET_SIZE) --msg-count $(PACKETS_SENT) --my-ip $(IP_SENDER) --my-port $(PORT_SENDER) --peer-ip $(IP_RECEIVER) --peer-port $(PORT_RECEIVER)
+
+exp-drop-send: sender/sender 
+	./sender/sender --all-invalid --msg-size $(PACKET_SIZE) --msg-count $(PACKETS_SENT) --my-ip $(IP_SENDER) --my-port $(PORT_SENDER) --peer-ip $(IP_RECEIVER) --peer-port $(PORT_RECEIVER)
+
+exp-accept-send: sender/sender 
+	./sender/sender --all-valid --msg-size $(PACKET_SIZE) --msg-count $(PACKETS_SENT) --my-ip $(IP_SENDER) --my-port $(PORT_SENDER) --peer-ip $(IP_RECEIVER) --peer-port $(PORT_RECEIVER)
+
+exp-xdp-filter-recv: xdp-load-xdp-filter receiver/receiver 
+	./receiver/receiver --msg-size $(PACKET_SIZE) --msg-count $(PACKETS_RECEIVED) --my-ip $(IP_RECEIVER) --my-port $(PORT_RECEIVER) --peer-ip $(IP_SENDER) --peer-port $(PORT_SENDER) --csv result-filter-xdp.csv
 
 
 exp-def-filter-recv: xdp-unload receiver/receiver 
-	./receiver/receiver --msg-size $(PACKET_SIZE) --msg-count $(PACKETS_RECEIVED) --my-ip $(IP_RECEIVER) --my-port $(PORT_RECEIVER) --peer-ip $(IP_SENDER) --peer-port $(PORT_SENDER) --csv result-def.csv
-exp-def-filter-send: sender/sender 
-	./sender/sender --msg-size $(PACKET_SIZE) --msg-count $(PACKETS_SENT) --my-ip $(IP_SENDER) --my-port $(PORT_SENDER) --peer-ip $(IP_RECEIVER) --peer-port $(PORT_RECEIVER)
+	./receiver/receiver --msg-size $(PACKET_SIZE) --msg-count $(PACKETS_RECEIVED) --my-ip $(IP_RECEIVER) --my-port $(PORT_RECEIVER) --peer-ip $(IP_SENDER) --peer-port $(PORT_SENDER) --csv result-filter-def.csv
 
 
+# packet dropping
+exp-xdp-drop-recv: xdp-load-xdp-filter receiver/receiver 
+	./receiver/receiver --msg-size $(PACKET_SIZE) --msg-count $(PACKETS_RECEIVED) --my-ip $(IP_RECEIVER) --my-port $(PORT_RECEIVER) --peer-ip $(IP_SENDER) --peer-port $(PORT_SENDER) --csv result-drop-xdp.csv
+
+
+exp-def-drop-recv: xdp-unload receiver/receiver 
+	./receiver/receiver --msg-size $(PACKET_SIZE) --msg-count $(PACKETS_RECEIVED) --my-ip $(IP_RECEIVER) --my-port $(PORT_RECEIVER) --peer-ip $(IP_SENDER) --peer-port $(PORT_SENDER) --csv result-drop-def.csv
+
+
+exp-xdp-accept-recv: xdp-load-xdp-filter receiver/receiver 
+	./receiver/receiver --msg-size $(PACKET_SIZE) --msg-count $(PACKETS_RECEIVED) --my-ip $(IP_RECEIVER) --my-port $(PORT_RECEIVER) --peer-ip $(IP_SENDER) --peer-port $(PORT_SENDER) --csv result-accept-xdp.csv
+
+
+exp-def-accept-recv: xdp-unload receiver/receiver 
+	./receiver/receiver --msg-size $(PACKET_SIZE) --msg-count $(PACKETS_RECEIVED) --my-ip $(IP_RECEIVER) --my-port $(PORT_RECEIVER) --peer-ip $(IP_SENDER) --peer-port $(PORT_SENDER) --csv result-accept-def.csv
 
 
