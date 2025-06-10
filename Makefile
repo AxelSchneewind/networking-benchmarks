@@ -2,26 +2,6 @@
 
 .phony: setup
 setup: xdp-tutorial dpdk
-	
-.phony: help
-help:
-	@echo 'This repository provides code to benchmark different network mechanism in linux'
-	@echo 'First, use "make setup" to initialize everything'
-	@echo ''
-	@echo 'COMPILATION:'
-	@echo 'XDP-programs:     compile using e.g. "make xdp-compile-xdp-filter" for xdp-filter'
-	@echo 'DPDK-programs:    TODO'
-	@echo 'default programs: TODO'
-	@echo '                       '
-	@echo 'EXECUTION: Receiver'
-	@echo 'XDP-programs:     load an xdp-program using e.g. "make xdp-load-xdp-filter" for xdp-filter'
-	@echo 'DPDK-programs:    bind the required driver to an interface using e.g. "make dpdk-bind"'
-	@echo '                  then run '
-	@echo 'default programs: '
-	@echo 'EXECUTION: Sender'
-	@echo '                  simply "make run-sender"'
-
-
 
 ##################################### XDP #####################################
 
@@ -30,9 +10,6 @@ xdp-tutorial:
 	@[ -d xdp-tutorial ] && exit
 	@git clone --recurse-submodules https://github.com/xdp-project/xdp-tutorial.git&&\
 	cd xdp-tutorial && ./testenv/setup-env.sh && make
-
-# if make does not succeed, try 
-# ./testenv/testenv.sh
 
 # copy subproject into xdp-tutorials to allow compilation using its Makefile
 xdp-tutorial/%: %/ xdp-tutorial filter.h
@@ -54,24 +31,6 @@ xdp-compile: xdp-compile-xdp-filter
 xdp-view-objdump-%:
 	@llvm-objdump -S xdp-tutorial/$*/*_kern.o
 
-# the output should look something like this:
-# xdp_pass_kern.o:        file format elf64-bpf
-# 
-# Disassembly of section xdp:
-# 
-# 0000000000000000 <xdp_prog_simple>:
-# ;       return XDP_PASS;
-#        0:       b7 00 00 00 02 00 00 00 r0 = 0x2
-#        1:       95 00 00 00 00 00 00 00 exit
-
-# so, not much going on. simply setting the return value and exiting.
-
-
-# load xdp program using ip and check if it now still responds to ping packets
-# With XDP_PASS this should still work
-# When replacing XDP_PASS in xdp_pass_kern.c with XDP_DROP,recompile and reload.
-# Ping again, now there is no response. Packets are dropped.
-
 xdp-load-%: xdp-compile-% xdp-unload
 	sudo ip link set  dev lo xdpgeneric obj $(wildcard xdp-tutorial/$*/*_kern.o) sec xdp
 	@echo 'successfully loaded program $*'
@@ -87,15 +46,88 @@ xdp-unload:
 
 
 
-#################################### DPDK #####################################
+
+
+################################### SENDER ####################################
+
+# compilation for sender side of benchmark
+sender/cmdline.c: sender/cmdline.ggo
+	gengetopt -i sender/cmdline.ggo --output-dir=sender
+
+sender/sender: sender/sender.c sender/cmdline.c
+	gcc sender/*.c -I. -o sender/sender
+
+run-sender: sender/sender
+	./sender/sender -m 6000
+
+
+receiver/cmdline.c: receiver/cmdline.ggo
+	gengetopt -i receiver/cmdline.ggo --output-dir=receiver
+
+receiver/receiver: receiver/receiver.c receiver/cmdline.c
+	gcc receiver/*.c -I. -o receiver/receiver
+
+run-receiver: receiver/receiver
+	./receiver/receiver -m 6000
+
+
+
+################################## EXPERIMENTS ##################################
+IP_SENDER=127.0.0.1
+PORT_SENDER=5005
+IP_RECEIVER=127.0.0.1
+PORT_RECEIVER=5006
+
+PACKETS_SENT=100000
+PACKETS_RECEIVED=100000
+PACKET_SIZE=20
+
+
+# send side targets (filter for mix of valid/invalid packets, drop for invalid and accept for valid ones)
+exp-filter-send: sender/sender 
+	./sender/sender --msg-size $(PACKET_SIZE) --msg-count $(PACKETS_SENT) --my-ip $(IP_SENDER) --my-port $(PORT_SENDER) --peer-ip $(IP_RECEIVER) --peer-port $(PORT_RECEIVER)
+
+exp-drop-send: sender/sender 
+	./sender/sender --all-invalid --msg-size $(PACKET_SIZE) --msg-count $(PACKETS_SENT) --my-ip $(IP_SENDER) --my-port $(PORT_SENDER) --peer-ip $(IP_RECEIVER) --peer-port $(PORT_RECEIVER)
+
+exp-accept-send: sender/sender 
+	./sender/sender --all-valid --msg-size $(PACKET_SIZE) --msg-count $(PACKETS_SENT) --my-ip $(IP_SENDER) --my-port $(PORT_SENDER) --peer-ip $(IP_RECEIVER) --peer-port $(PORT_RECEIVER)
+
+
+
+# receive side targets (identical for each experiment, apart from result file)
+# for each experiment, one target for xdp and one for the kernel stack is provided
+exp-xdp-filter-recv: xdp-load-xdp-filter receiver/receiver 
+	./receiver/receiver --msg-size $(PACKET_SIZE) --msg-count $(PACKETS_RECEIVED) --my-ip $(IP_RECEIVER) --my-port $(PORT_RECEIVER) --peer-ip $(IP_SENDER) --peer-port $(PORT_SENDER) --csv result-filter-xdp.csv
+
+exp-def-filter-recv: xdp-unload receiver/receiver 
+	./receiver/receiver --msg-size $(PACKET_SIZE) --msg-count $(PACKETS_RECEIVED) --my-ip $(IP_RECEIVER) --my-port $(PORT_RECEIVER) --peer-ip $(IP_SENDER) --peer-port $(PORT_SENDER) --csv result-filter-def.csv
+
+exp-xdp-drop-recv: xdp-load-xdp-filter receiver/receiver 
+	./receiver/receiver --msg-size $(PACKET_SIZE) --msg-count $(PACKETS_RECEIVED) --my-ip $(IP_RECEIVER) --my-port $(PORT_RECEIVER) --peer-ip $(IP_SENDER) --peer-port $(PORT_SENDER) --csv result-drop-xdp.csv
+
+exp-def-drop-recv: xdp-unload receiver/receiver 
+	./receiver/receiver --msg-size $(PACKET_SIZE) --msg-count $(PACKETS_RECEIVED) --my-ip $(IP_RECEIVER) --my-port $(PORT_RECEIVER) --peer-ip $(IP_SENDER) --peer-port $(PORT_SENDER) --csv result-drop-def.csv
+
+
+exp-xdp-accept-recv: xdp-load-xdp-filter receiver/receiver 
+	./receiver/receiver --msg-size $(PACKET_SIZE) --msg-count $(PACKETS_RECEIVED) --my-ip $(IP_RECEIVER) --my-port $(PORT_RECEIVER) --peer-ip $(IP_SENDER) --peer-port $(PORT_SENDER) --csv result-accept-xdp.csv
+
+exp-def-accept-recv: xdp-unload receiver/receiver 
+	./receiver/receiver --msg-size $(PACKET_SIZE) --msg-count $(PACKETS_RECEIVED) --my-ip $(IP_RECEIVER) --my-port $(PORT_RECEIVER) --peer-ip $(IP_SENDER) --peer-port $(PORT_SENDER) --csv result-accept-def.csv
+
+
+
+
+
+
+
+########################## DPDK (not working currently) ############################
 
 # variables for DPDK
-DEVNAME=wlp4s0
-DEFAULTDRIVER=ath10k_pci
-DEVUUID=0000:04:00.0
-# DEVNAME=enp3s0
-# DEFAULTDRIVER=r8169
-# DEVUUID=0000:03:00.0
+DEVNAME=
+DEFAULTDRIVER=
+DEVUUID=
 
 # default, checks passed, overwritten if any of the above variables undefined
 dpdk-check:
@@ -154,77 +186,4 @@ dpdk-run-%: dpdk-check dpdk-compile-% %/*
 
 .phony: dpdk-compile-dpdk-filter 
 dpdk-compile: dpdk-compile-dpdk-filter 
-
-
-
-
-################################### SENDER ####################################
-
-# compilation for sender side of benchmark
-sender/cmdline.c: sender/cmdline.ggo
-	gengetopt -i sender/cmdline.ggo --output-dir=sender
-
-sender/sender: sender/sender.c sender/cmdline.c
-	gcc sender/*.c -I. -o sender/sender
-
-run-sender: sender/sender
-	./sender/sender -m 6000
-
-
-receiver/cmdline.c: receiver/cmdline.ggo
-	gengetopt -i receiver/cmdline.ggo --output-dir=receiver
-
-receiver/receiver: receiver/receiver.c receiver/cmdline.c
-	gcc receiver/*.c -I. -o receiver/receiver
-
-run-receiver: receiver/receiver
-	./receiver/receiver -m 6000
-
-
-
-################################## EXPERIMENTS ##################################
-IP_SENDER=127.0.0.1
-PORT_SENDER=5005
-IP_RECEIVER=127.0.0.1
-PORT_RECEIVER=5006
-
-PACKETS_SENT=100000
-PACKETS_RECEIVED=100000
-PACKET_SIZE=20
-
-
-# send side
-exp-filter-send: sender/sender 
-	./sender/sender --msg-size $(PACKET_SIZE) --msg-count $(PACKETS_SENT) --my-ip $(IP_SENDER) --my-port $(PORT_SENDER) --peer-ip $(IP_RECEIVER) --peer-port $(PORT_RECEIVER)
-
-exp-drop-send: sender/sender 
-	./sender/sender --all-invalid --msg-size $(PACKET_SIZE) --msg-count $(PACKETS_SENT) --my-ip $(IP_SENDER) --my-port $(PORT_SENDER) --peer-ip $(IP_RECEIVER) --peer-port $(PORT_RECEIVER)
-
-exp-accept-send: sender/sender 
-	./sender/sender --all-valid --msg-size $(PACKET_SIZE) --msg-count $(PACKETS_SENT) --my-ip $(IP_SENDER) --my-port $(PORT_SENDER) --peer-ip $(IP_RECEIVER) --peer-port $(PORT_RECEIVER)
-
-exp-xdp-filter-recv: xdp-load-xdp-filter receiver/receiver 
-	./receiver/receiver --msg-size $(PACKET_SIZE) --msg-count $(PACKETS_RECEIVED) --my-ip $(IP_RECEIVER) --my-port $(PORT_RECEIVER) --peer-ip $(IP_SENDER) --peer-port $(PORT_SENDER) --csv result-filter-xdp.csv
-
-
-exp-def-filter-recv: xdp-unload receiver/receiver 
-	./receiver/receiver --msg-size $(PACKET_SIZE) --msg-count $(PACKETS_RECEIVED) --my-ip $(IP_RECEIVER) --my-port $(PORT_RECEIVER) --peer-ip $(IP_SENDER) --peer-port $(PORT_SENDER) --csv result-filter-def.csv
-
-
-# packet dropping
-exp-xdp-drop-recv: xdp-load-xdp-filter receiver/receiver 
-	./receiver/receiver --msg-size $(PACKET_SIZE) --msg-count $(PACKETS_RECEIVED) --my-ip $(IP_RECEIVER) --my-port $(PORT_RECEIVER) --peer-ip $(IP_SENDER) --peer-port $(PORT_SENDER) --csv result-drop-xdp.csv
-
-
-exp-def-drop-recv: xdp-unload receiver/receiver 
-	./receiver/receiver --msg-size $(PACKET_SIZE) --msg-count $(PACKETS_RECEIVED) --my-ip $(IP_RECEIVER) --my-port $(PORT_RECEIVER) --peer-ip $(IP_SENDER) --peer-port $(PORT_SENDER) --csv result-drop-def.csv
-
-
-exp-xdp-accept-recv: xdp-load-xdp-filter receiver/receiver 
-	./receiver/receiver --msg-size $(PACKET_SIZE) --msg-count $(PACKETS_RECEIVED) --my-ip $(IP_RECEIVER) --my-port $(PORT_RECEIVER) --peer-ip $(IP_SENDER) --peer-port $(PORT_SENDER) --csv result-accept-xdp.csv
-
-
-exp-def-accept-recv: xdp-unload receiver/receiver 
-	./receiver/receiver --msg-size $(PACKET_SIZE) --msg-count $(PACKETS_RECEIVED) --my-ip $(IP_RECEIVER) --my-port $(PORT_RECEIVER) --peer-ip $(IP_SENDER) --peer-port $(PORT_SENDER) --csv result-accept-def.csv
-
 
